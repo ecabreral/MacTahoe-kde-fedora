@@ -1,8 +1,25 @@
 # Changelog
 
-Formato: `YYYY-MM-DD` · rama local `fedora-44-plasma-6.6` (fork de `vinceliuice/MacTahoe-kde`).
+Formato: `YYYY-MM-DD` · ramas locales del fork `vinceliuice/MacTahoe-kde`.
 
-## 1.1.1 — 2026-09-24
+## 1.2.0 — 2026-09-24 · rama `fedora-45-beta`
+
+Soporte de **Fedora 45 beta** (Plasma 6.7.4 · Qt 6.11.1 · Wayland), validado de extremo a extremo.
+
+### Añadido
+
+- `fedora/build-bundle.sh`: opción `--rpm-dir DIR` para construir el bundle con RPMs ya descargados (imprescindible
+  en Branched/Rawhide, donde las rutas públicas de descarga aún no existen).
+- `fedora/build-bundle.sh`: prueba automáticamente las rutas `releases/` y `development/` antes de fallar.
+
+### Verificado
+
+- Instalación completa desde bundle sobre Fedora 45 beta: Global Theme, iconos/cursores, esquema de color,
+  Kvantum (`1.1.6-2.fc45`), Aurorae y layout macOS (`[top h=44] [bottom h=64]`), sin huecos de letterbox.
+- Los parches siguen siendo necesarios en Plasma 6.7: `org.kde.plasma.icontasks` continúa roto y
+  `lookandfeeltool` sigue sin aplicar todas las claves de `defaults`.
+
+## 1.1.1 — 2026-09-24 · rama `fedora-44-plasma-6.6`
 
 ### Corregido
 

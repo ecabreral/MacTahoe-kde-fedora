@@ -14,10 +14,15 @@ VERSION="${VERSION:-1.1.0}"
 CACHE_DIR="${CACHE_DIR:-${HOME}/.cache/mactahoe-bundle}"
 OUT_DIR="${OUT_DIR:-${REPO_ROOT}/dist}"
 WORK_NAME="MacTahoe-kde-bundle"
+RPM_DIR=""
+LOCAL_RPMS=()
 
 ICON_REPO_URL="https://codeload.github.com/vinceliuice/MacTahoe-icon-theme/tar.gz/refs/heads/main"
 ICON_FILE="MacTahoe-icon-theme.tar.gz"
-FEDORA_BASE="https://dl.fedoraproject.org/pub/fedora/linux/releases"
+FEDORA_BASES=(
+  "https://dl.fedoraproject.org/pub/fedora/linux/releases"
+  "https://dl.fedoraproject.org/pub/fedora/linux/development"
+)
 KVANTUM_PKGS=( "kvantum" "kvantum-data" )
 
 usage() {
@@ -29,7 +34,8 @@ Usage: $(basename "$0") [OPTION]...
   --version VERSION  Bundle version used in the file name (Default: ${VERSION})
   --out-dir DIR      Where to write the tarball (Default: ${OUT_DIR})
   --cache-dir DIR    Reuse downloaded files (Default: ${CACHE_DIR})
-  --no cache         Ignore cached downloads and fetch everything again
+  --rpm-dir DIR      Use kvantum rpms already downloaded in DIR (Branched/Rawhide friendly)
+  --no-cache         Ignore cached downloads and fetch everything again
   -h, --help         Show this help
 EOF
 }
@@ -42,6 +48,7 @@ while [[ $# -gt 0 ]]; do
     --version) VERSION="$2"; shift 2 ;;
     --out-dir) OUT_DIR="$2"; shift 2 ;;
     --cache-dir) CACHE_DIR="$2"; shift 2 ;;
+    --rpm-dir) RPM_DIR="$2"; shift 2 ;;
     --no-cache) FORCE_DOWNLOAD=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1"; usage; exit 1 ;;
@@ -71,24 +78,43 @@ else
   cp "${BUNDLE}/${ICON_FILE}" "${CACHE_DIR}/${ICON_FILE}"
 fi
 
-say "Descargando kvantum ${KVANTUM_VERSION} para Fedora ${FEDORA_VERSION}"
-K_DIR="k"
-for pkg in "${KVANTUM_PKGS[@]}"; do
-  arch="x86_64"
-  [[ "${pkg}" == "kvantum-data" ]] && arch="noarch"
-  rpm="${pkg}-${KVANTUM_VERSION}-${RPM_RELEASE}.fc${FEDORA_VERSION}.${arch}.rpm"
-  url="${FEDORA_BASE}/${FEDORA_VERSION}/Everything/x86_64/os/Packages/${K_DIR}/${rpm}"
-  if [[ -f "${CACHE_DIR}/${rpm}" && "${FORCE_DOWNLOAD}" -eq 0 ]]; then
-    cp "${CACHE_DIR}/${rpm}" "${BUNDLE}/${rpm}"
-  else
-    curl -fsSL "${url}" -o "${BUNDLE}/${rpm}" || {
-      warn "no se pudo descargar ${url}"
-      warn "revisa --fedora/--kvantum o usa kvantum desde los repos de la maquina destino"
+say "Preparando kvantum para Fedora ${FEDORA_VERSION}"
+if [[ -n "${RPM_DIR}" ]]; then
+  shopt -s nullglob
+  LOCAL_RPMS=("${RPM_DIR}"/*.rpm)
+  shopt -u nullglob
+  [[ ${#LOCAL_RPMS[@]} -gt 0 ]] || { warn "no hay rpms en ${RPM_DIR}"; exit 1; }
+  for rpm in "${LOCAL_RPMS[@]}"; do
+    cp "${rpm}" "${BUNDLE}/$(basename "${rpm}")"
+    echo "    local: $(basename "${rpm}")"
+  done
+else
+  K_DIR="k"
+  for pkg in "${KVANTUM_PKGS[@]}"; do
+    arch="x86_64"
+    [[ "${pkg}" == "kvantum-data" ]] && arch="noarch"
+    rpm="${pkg}-${KVANTUM_VERSION}-${RPM_RELEASE}.fc${FEDORA_VERSION}.${arch}.rpm"
+    if [[ -f "${CACHE_DIR}/${rpm}" && "${FORCE_DOWNLOAD}" -eq 0 ]]; then
+      cp "${CACHE_DIR}/${rpm}" "${BUNDLE}/${rpm}"
+      warn "usando copia en cache de ${rpm}"
+      continue
+    fi
+    downloaded=0
+    for base in "${FEDORA_BASES[@]}"; do
+      url="${base}/${FEDORA_VERSION}/Everything/x86_64/os/Packages/${K_DIR}/${rpm}"
+      if curl -fsSL "${url}" -o "${BUNDLE}/${rpm}"; then
+        downloaded=1
+        cp "${BUNDLE}/${rpm}" "${CACHE_DIR}/${rpm}"
+        break
+      fi
+    done
+    [[ "${downloaded}" -eq 1 ]] || {
+      warn "no se pudo descargar ${rpm}"
+      warn "prueba a bajarlos tu y pasar --rpm-dir: dnf download --destdir DIR kvantum kvantum-data"
       exit 1
     }
-    cp "${BUNDLE}/${rpm}" "${CACHE_DIR}/${rpm}"
-  fi
-done
+  done
+fi
 
 say "Generando sumas de verificacion"
 ( cd "${BUNDLE}" && find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS.txt )

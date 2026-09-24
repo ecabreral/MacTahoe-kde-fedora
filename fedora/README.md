@@ -20,10 +20,11 @@ updated: 2026-09-24
 Guía y aprovisionamiento **reproducible** del tema [MacTahoe-kde](https://github.com/vinceliuice/MacTahoe-kde)
 sobre una máquina Fedora con KDE Plasma 6.
 
-> [!NOTE] Estado del entorno validado
-> Probado de extremo a extremo en **Fedora 44 · Plasma 6.6.4 · Qt 6.10.2 · sesión Wayland**, dentro de una VM de
-> **GNOME Boxes** (libvirt/qemu, red NAT `virbr0`). Ese mismo procedimiento se ejecutó tres veces sobre la misma
-> máquina (dark → light → dark) sin dejar residuos.
+> [!NOTE] Estado de los entornos validados
+> - **Fedora 44 · Plasma 6.6.4 · Qt 6.10.2 · Wayland** (GNOME Boxes, red NAT `virbr0`) — rama
+>   `fedora-44-plasma-6.6`. El procedimiento se repitió tres veces sobre la misma máquina (dark → light → dark).
+> - **Fedora 45 beta · Plasma 6.7.4 · Qt 6.11.1 · Wayland** — rama **`fedora-45-beta`**, mismo procedimiento con
+>   kvantum `1.1.6-2.fc45`.
 
 > [!WARNING] Este repo es un fork local del original
 > Los ficheros del tema son del autor original (Vince Liuice). Aquí sólo se añaden **parches de compatibilidad**
@@ -226,8 +227,18 @@ fichero con todo y cópialo.
 # ./fedora/build-bundle.sh --no-cache         # ignora la cache de descargas
 ```
 
-Opciones: `--fedora`, `--kvantum`, `--version`, `--out-dir`, `--cache-dir`, `--no-cache`.
+Opciones: `--fedora`, `--kvantum`, `--version`, `--out-dir`, `--cache-dir`, `--no-cache`, `--rpm-dir`.
 Las descargas se cachean en `~/.cache/mactahoe-bundle` para rehacer el bundle al instante.
+
+> [!TIP] Fedora Branched / Rawhide (45 beta)
+> En una beta los RPM suelen no estar aún en las rutas públicas de descarga. Bájalos en cualquier Fedora 45 y
+> pásalos al builder:
+>
+> ```bash
+> dnf download --destdir /tmp/kvantum45 kvantum kvantum-data
+> rm -f /tmp/kvantum45/*i686*                       # descartar la arquitectura que no toque
+> ./fedora/build-bundle.sh --fedora 45 --rpm-dir /tmp/kvantum45 --version 1.2.0
+> ```
 
 ### 2 · Enviar (host)
 
@@ -370,8 +381,12 @@ Commits de la rama local `fedora-44-plasma-6.6`:
 
 ## Compatibilidad y mantenimiento
 
-- **Fedora 44 / Plasma 6.6.4 / Qt 6.10.2 / Wayland**: soportado y verificado.
-- **Aurorae** sigue presente en Plasma 6.6:
+- **Fedora 44 / Plasma 6.6.4 / Qt 6.10.2 / Wayland**: soportado y verificado (rama `fedora-44-plasma-6.6`).
+- **Fedora 45 beta / Plasma 6.7.4 / Qt 6.11.1 / Wayland**: soportado y verificado (rama `fedora-45-beta`).
+  Los parches siguen siendo necesarios: `icontasks` continúa roto y `lookandfeeltool` sigue aplicando sólo una
+  parte de `defaults`. kvantum para esta release es `1.1.6-2.fc45` (no disponible en las rutas públicas de
+  descarga de la beta: usa `dnf download` + `--rpm-dir`).
+- **Aurorae** sigue presente en Plasma 6.6 y 6.7:
   `/usr/lib64/qt6/plugins/org.kde.kdecoration3/org.kde.kwin.aurorae.so`. Si kwin hiciera fallback, reescribiría
   `kwinrc` con `org.kde.breezedecoration`: es la señal para revisar el tema de Aurorae instalado.
 - **Applets**: en Fedora 44 los applets “core” (reloj, bandeja, kickoff, taskmanager…) vienen **compilados** en
