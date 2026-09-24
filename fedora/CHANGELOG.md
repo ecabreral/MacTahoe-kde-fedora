@@ -2,6 +2,17 @@
 
 Formato: `YYYY-MM-DD` · ramas locales del fork `vinceliuice/MacTahoe-kde`.
 
+## 1.2.1 — 2026-09-24 · rama `fedora-45-beta`
+
+### Corregido
+
+- **Dock de sólo iconos en Plasma 6.7**: se revierte la sustitución de `org.kde.plasma.icontasks` por
+  `org.kde.plasma.taskmanager` en los tres ficheros de layout (`MacTahoe-Dark`, `MacTahoe-Light`, `MacOSDock`).
+  En 6.7 `icontasks` es un paquete válido (`metadata.json` + `X-Plasma-RootPath` → reusa el QML del
+  `taskmanager`; su `main.qml` activa `iconsOnly` según el `pluginName`), por lo que el dock vuelve a mostrar
+  **sólo iconos** al abrir aplicaciones. El fallo de carga (error `mainscript`) era exclusivo de Plasma 6.6.
+  Validado en la VM de Fedora 45 beta (applet `org.kde.plasma.icontasks`, journal limpio).
+
 ## 1.2.0 — 2026-09-24 · rama `fedora-45-beta`
 
 Soporte de **Fedora 45 beta** (Plasma 6.7.4 · Qt 6.11.1 · Wayland), validado de extremo a extremo.

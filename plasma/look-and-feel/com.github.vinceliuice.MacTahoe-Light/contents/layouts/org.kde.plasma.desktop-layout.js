@@ -32,7 +32,7 @@ bpanel.lengthMode = "fit"
 bpanel.hiding = "dodgewindows"
 bpanel.height = 64
 
-let taskBar = bpanel.addWidget("org.kde.plasma.taskmanager")
+let taskBar = bpanel.addWidget("org.kde.plasma.icontasks")
 taskBar.currentConfigGroup = ["General"]
 taskBar.writeConfig("launchers", [
     "preferred://filemanager",

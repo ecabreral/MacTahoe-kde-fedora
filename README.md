@@ -46,9 +46,9 @@ If you like my project, you can donate at:
 ## Local provisioning (Fedora KDE / Plasma 6)
 
 This repository also carries a **local, reproducible setup for Fedora KDE Plasma 6** (tested on Fedora 44,
-Plasma 6.6.4, Qt 6.10.2, Wayland, inside a GNOME Boxes VM), plus the compatibility patches needed for Plasma 6.6
-(the `org.kde.plasma.icontasks` applet no longer exists and several `defaults` entries are not applied by
-`lookandfeeltool`).
+Plasma 6.6.4 and Fedora 45 beta, Plasma 6.7.4, Wayland, inside GNOME Boxes VMs), plus the compatibility patches
+needed for Plasma 6.6 (the `org.kde.plasma.icontasks` applet does not load there, so the dock layout falls back
+to `org.kde.plasma.taskmanager`; several `defaults` entries are not applied by `lookandfeeltool`).
 
 See **[fedora/README.md](fedora/README.md)** for requirements, usage, verification, rollback and troubleshooting.
 

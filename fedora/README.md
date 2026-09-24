@@ -354,7 +354,7 @@ sudo dnf remove kvantum
 | Síntoma | Causa | Arreglo |
 | --- | --- | --- |
 | `ERROR: No hay sesion grafica en /run/user/<uid>` | No hay sesión KDE iniciada (o se ejecuta desde tty) | Entra en la sesión gráfica y relanza; el script necesita el bus de sesión |
-| El dock aparece vacío y el journal muestra `Could not find required file "mainscript" ... icontasks` | Plasma 6.6/Fedora 44 ya no trae `org.kde.plasma.icontasks` (sólo un `metadata.json` huérfano) | Ya parcheado: los layouts usan `org.kde.plasma.taskmanager` |
+| El dock aparece vacío y el journal muestra `Could not find required file "mainscript" ... icontasks` | **Plasma 6.6/Fedora 44** no carga `org.kde.plasma.icontasks` (paquete con sólo `metadata.json`) | En la rama `fedora-44-plasma-6.6` los layouts usan `org.kde.plasma.taskmanager` (dock con texto junto al icono). En Plasma 6.7 el paquete es válido y carga |
 | Sólo cambian los colores; iconos/cursor/decoración siguen con Breeze | `lookandfeeltool` de Plasma 6.6 aplica únicamente colores y `LookAndFeelPackage` | El script parsea `contents/defaults` y escribe cada entrada con `kwriteconfig6` |
 | Franja blanca arriba y abajo que parece “otro panel” | Fondo 3840x2160 (16:9) con `FillMode=1` (`KeepAspectRatio`) en pantalla 16:10 → letterbox | El script fuerza `FillMode=2` |
 | Captura `virsh screenshot` en negro con `Display output is not active` | La pantalla de la VM está en reposo | `virsh qemu-monitor-command <dominio> --hmp 'sendkey ctrl'` y volver a capturar |
@@ -370,9 +370,12 @@ sudo dnf remove kvantum
 | --- | --- | --- |
 | `install.sh` | `LAYOUT_DIR="${dest}/share/plasma/layout-templates"` | En la rama root estaba hardcodeado a `/usr` |
 | `install.sh` | `-n/--name` → `name="${2}"; shift 2` | El original guardaba el propio flag y rompía la opción |
-| `plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Dark/contents/layouts/org.kde.plasma.desktop-layout.js` | `org.kde.plasma.icontasks` → `org.kde.plasma.taskmanager` | El applet “Icons-only task manager” ya no existe en Plasma 6.6 |
+| `plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Dark/contents/layouts/org.kde.plasma.desktop-layout.js` | `org.kde.plasma.icontasks` → `org.kde.plasma.taskmanager` | **Sólo rama `fedora-44-plasma-6.6`** (Plasma 6.6): el applet “Icons-only task manager” no carga |
 | `plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Light/contents/layouts/org.kde.plasma.desktop-layout.js` | ídem | ídem |
 | `plasma/layout-templates/org.github.desktop.MacOSDock/contents/layout.js` | ídem | ídem |
+
+> Nota: en la rama `fedora-45-beta` (Plasma 6.7) **no** se aplica este parche: `org.kde.plasma.icontasks` carga
+> y da el dock de sólo iconos (su `main.qml` fuerza `iconsOnly` según el `pluginName`).
 
 Commits de la rama local `fedora-44-plasma-6.6`:
 
@@ -383,8 +386,9 @@ Commits de la rama local `fedora-44-plasma-6.6`:
 
 - **Fedora 44 / Plasma 6.6.4 / Qt 6.10.2 / Wayland**: soportado y verificado (rama `fedora-44-plasma-6.6`).
 - **Fedora 45 beta / Plasma 6.7.4 / Qt 6.11.1 / Wayland**: soportado y verificado (rama `fedora-45-beta`).
-  Los parches siguen siendo necesarios: `icontasks` continúa roto y `lookandfeeltool` sigue aplicando sólo una
-  parte de `defaults`. kvantum para esta release es `1.1.6-2.fc45` (no disponible en las rutas públicas de
+  Los parches en Plasma 6.7 se reducen a `install.sh`: el **dock de sólo iconos funciona** con `icontasks`
+  (a diferencia de Plasma 6.6) y `lookandfeeltool` sigue aplicando sólo una parte de `defaults`. kvantum para
+  esta release es `1.1.6-2.fc45` (no disponible en las rutas públicas de
   descarga de la beta: usa `dnf download` + `--rpm-dir`).
 - **Aurorae** sigue presente en Plasma 6.6 y 6.7:
   `/usr/lib64/qt6/plugins/org.kde.kdecoration3/org.kde.kwin.aurorae.so`. Si kwin hiciera fallback, reescribiría
@@ -400,7 +404,8 @@ Commits de la rama local `fedora-44-plasma-6.6`:
   git cherry-pick dd15e3d 887df8f # tus commits locales, si el rebase los dejó fuera
   ```
 
-  Tras actualizar, vuelve a revisar los 5 ficheros parcheados: upstream puede reintroducir `icontasks`.
+  Tras actualizar, vuelve a revisar los ficheros parcheados: en la rama `fedora-45-beta` el layout debe seguir
+  con `icontasks` (upstream podría reintroducir `taskmanager` y perderías el dock de sólo iconos).
 
 ## Alcance y fuera de alcance
 

@@ -22,7 +22,7 @@ if (panel.formFactor === "horizontal") {
     }
 }
 
-panel.addWidget("org.kde.plasma.taskmanager")
+panel.addWidget("org.kde.plasma.icontasks")
 
 /* Next up is determining whether to add the Input Method Panel
  * widget to the panel or not. This is done based on whether
