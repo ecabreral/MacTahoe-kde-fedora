@@ -2,6 +2,28 @@
 
 Formato: `YYYY-MM-DD` · ramas locales del fork `vinceliuice/MacTahoe-kde`.
 
+## 1.2.2 — 2026-09-24 · rama `fedora-45-beta`
+
+### Añadido
+
+- `fedora/setup-magic-lamp.sh`: activa el efecto **Magic Lamp integrado de kwin** (`magiclamp`): minimizar una
+  ventana la encoje hasta el icono del dock, como en macOS. No compila nada (kwin 6.7.4 ya lo incluye en el
+  binario) y sólo escribe `kwinrc`: `[Plugins] magiclampEnabled=true`, `[Plugins] squashEnabled=false`
+  (`squash` comparte el grupo exclusivo `minimize`) y, opcionalmente, `[Effect-magiclamp] AnimationDuration`.
+  Aplica al momento vía DBus (`org.kde.kwin.Effects.loadEffect` / `unloadEffect` + `org.kde.KWin.reconfigure`)
+  y es idempotente. Opción `--disable` para revertir a Squash. Documentado en `fedora/README.md`.
+
+### Requisito descubierto
+
+- **3D real en la VM**: kwin sólo carga animaciones si el compositor no usa un renderizador GL por software
+  (`WorkspaceScene::animationsSupported`). Con un renderizador software (VM sin 3D) kwin rechaza cargar
+  `magiclamp`, `squash` y `fade`. En este host la habilitación no bastó con `accel3d=yes` + `<gl enable='yes'>`:
+  libvirt 12.6 no emite la variante GL de `virtio-vga` para QEMU 11.1, así que se inyecta el dispositivo vía
+  `qemu:commandline`: `-device virtio-vga-gl,blob=on` (con `<video><model type='none'/>`) y `gl=on,
+  rendernode=/dev/dri/renderD128` en spice. Además, GNOME Boxes debe tener `acceleration-3d=true` en
+  `~/.config/gnome-boxes/sources/QEMU Session`, o al lanzar reescribe el dominio con `gl=no` y el arranque
+  falla ("The display backend does not have OpenGL support enabled"). Detalles en `fedora/README.md`.
+
 ## 1.2.1 — 2026-09-24 · rama `fedora-45-beta`
 
 ### Corregido

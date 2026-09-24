@@ -36,6 +36,7 @@ sobre una máquina Fedora con KDE Plasma 6.
 - [Requisitos](#requisitos)
 - [Mapa de archivos](#mapa-de-archivos)
 - [Guía rápida](#guía-rápida)
+- [Efecto Magic Lamp (minimizar al dock)](#efecto-magic-lamp-minimizar-al-dock)
 - [Instalación sin red: bundle autocontenido](#instalación-sin-red-bundle-autocontenido)
 - [De cero con GNOME Boxes](#de-cero-con-gnome-boxes)
 - [Referencia de opciones](#referencia-de-opciones)
@@ -76,6 +77,7 @@ sobre una máquina Fedora con KDE Plasma 6.
 | --- | --- | --- |
 | `fedora/setup-mactahoe.sh` | La propia VM | Provisionamiento completo: dependencias, iconos, tema, Global Theme, claves, layout, fondo y recarga |
 | `fedora/setup-remote.sh` | El host | Copia este repo a `~/MacTahoe-kde` en la VM (sin `.git`) y ejecuta el script anterior por SSH con TTY |
+| `fedora/setup-magic-lamp.sh` | La propia VM | Activa (o revierte con `--disable`) el **Magic Lamp** integrado de KWin: la ventana va a parar al icono del dock al minimizarse |
 | `fedora/build-bundle.sh` | El host | Descarga aquí kvantum y el tema de iconos y genera un **paquete autocontenido** para instalar sin red |
 | `fedora/README.md` | — | Este documento |
 | `fedora/CHANGELOG.md` | — | Historial de versiones |
@@ -106,6 +108,69 @@ cd ~/MacTahoe-kde && ./fedora/setup-mactahoe.sh
 > [!IMPORTANT]
 > `--enable-ssh` instala y arranca `sshd` dentro de la VM; es lo único que hay que hacer a mano (o con esa opción)
 > si la máquina es recién instalada, porque Fedora Workstation/KDE trae `sshd` **desactivado** por defecto.
+
+## Efecto Magic Lamp (minimizar al dock)
+
+Como en macOS, una ventana minimizada se **encoge y "cae" hasta el icono del dock**. Es el efecto
+`magiclamp` **integrado en kwin** desde Plasma 6 (no hay que compilar nada). En Fedora 45 beta (kwin 6.7.4, Wayland)
+viene dentro del binario y lo único necesario es activarlo y desactivar la animación por defecto (`squash`, con la que
+comparte el grupo exclusivo `minimize`).
+
+> [!NOTE]
+> Plasma 6.6 también lo incluye; la clave es tener un kwin ≥ 6.6 con compositor Wayland.
+
+Activar (idempotente; se puede relanzar sin problema):
+
+```bash
+ssh -t f45beta 'cd ~/MacTahoe-kde && ./fedora/setup-magic-lamp.sh'
+```
+
+Opciones:
+
+| Opción | Qué hace |
+| --- | --- |
+| `--duration MS` | Duración de la animación (defecto: 250 ms de KWin). Ej. `--duration 350` para un efecto más lento |
+| `--disable` | Revierte: vuelve a `squash` (animación por defecto) y descarga `magiclamp` |
+
+Verificación:
+
+```bash
+kreadconfig6 --file kwinrc --group Plugins          --key magiclampEnabled   # true
+kreadconfig6 --file kwinrc --group Plugins          --key squashEnabled      # false
+gdbus call --session --dest org.kde.KWin --object-path /Effects \
+  --method org.kde.kwin.Effects.isEffectLoaded magiclamp                      # (true,)
+```
+
+Si prefieres no guardar nada en los paneles del tema, recuerda que el script sólo toca `kwinrc` y la sesión de kwin:
+no re-instala el tema.
+
+### Requisito: 3D real en la VM (eje clave de esta VM)
+
+kwin sólo carga animaciones si el compositor **no** usa un renderizador GL por software (`WorkspaceScene::animationsSupported`).
+En una VM sin 3D (renderizador `llvmpipe`/swrast) kwin **rechaza cargar** `magiclamp`, `squash` y `fade` aunque la config
+sea correcta; el efecto simplemente no aparece en `isEffectLoaded`. Para esta VM (host Fedora 45) hubo que:
+
+1. En libvirt (dominio definido): gráficos spice con `<gl enable='yes' rendernode='/dev/dri/renderD128'/>`.
+2. **Inyectar la GPU GL**: libvirt 12.6 no traduce `accel3d='yes'` a la variante GL de `virtio-vga` en QEMU 11.1
+   (arranca la variante 2D y el guest sigue en software). Fix usado: `<video><model type='none'/></video>` y passthrough:
+   ```xml
+   <qemu:commandline>
+     <qemu:arg value='-device'/>
+     <qemu:arg value='virtio-vga-gl,id=video0,bus=pcie.0,addr=0x2,max_outputs=1,blob=on'/>
+   </qemu:commandline>
+   ```
+   (en QEMU 11 el 3D de virtio-gpu se controla con `blob=on`, ya no existe la propiedad `virgl`).
+3. **GNOME Boxes**: marcar `acceleration-3d=true` para el uuid de la VM en `~/.config/gnome-boxes/sources/QEMU Session`.
+   Si queda en `false`, Boxes reescribe el dominio con `<gl enable='no'>` al lanzar y el arranque muere con
+   *"The display backend does not have OpenGL support enabled"*.
+4. Reiniciar la VM (cambio de QEMU exige reboot completo, no `virsh reboot`).
+
+Verificación dentro del guest: `dmesg | grep virtio` → `[drm] features: +virgl +edid +resource_blob`, y kwin arranca
+eligiendo el backend `drm` (no `llvmpipe`).
+
+> [!NOTE]
+> La alternativa sin tocar el host es relanzar el script con `--force-software` (escribe
+> `~/.config/environment.d/95-kwin-force-animations.conf` para forzar animaciones por CPU, requiere logout/in).
 
 ## De cero con GNOME Boxes
 
