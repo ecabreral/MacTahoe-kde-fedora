@@ -58,6 +58,10 @@ LOOKFEEL_ID="com.github.vinceliuice.MacTahoe${VARIANT}"
 KVANTUM_THEME="MacTahoe"
 [[ "${VARIANT}" == "-Dark" ]] && KVANTUM_THEME="MacTahoeDark"
 
+say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m    %s\033[0m\n' "$*"; }
+die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+
 detect_bundle() {
   local parent
   [[ -z "${BUNDLE_DIR}" ]] || return 0
@@ -141,8 +145,6 @@ install_icon_theme() {
   ( cd "${ICON_CACHE}" && ./install.sh >/dev/null ) || warn "Fallo el instalador de iconos"
   [[ -d "${HOME}/.local/share/icons/MacTahoe" ]] || warn "No quedaron instalados los iconos MacTahoe"
 }
-warn() { printf '\033[1;33m    %s\033[0m\n' "$*"; }
-die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 run_root() {
   if [[ "$(id -u)" -eq 0 ]]; then "$@"; else sudo "$@"; fi
