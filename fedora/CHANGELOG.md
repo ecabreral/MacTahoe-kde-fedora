@@ -2,6 +2,14 @@
 
 Formato: `YYYY-MM-DD` · rama local `fedora-44-plasma-6.6` (fork de `vinceliuice/MacTahoe-kde`).
 
+## 1.1.1 — 2026-09-24
+
+### Corregido
+
+- `fedora/setup-mactahoe.sh`: `say`/`warn`/`die` se definían **después** de la detección del bundle, así que
+  `install.sh` abortaba al instante con `say: orden no encontrada`. Reconstruido el bundle como `1.1.1`
+  (quien se haya descargado el `1.1.0` debe usar éste).
+
 ## 1.1.0 — 2026-09-24
 
 Instalación sin red mediante paquete autocontenido.
