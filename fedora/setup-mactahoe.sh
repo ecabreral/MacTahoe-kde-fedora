@@ -13,12 +13,17 @@ APPLY_LAYOUT=1
 ENABLE_SSH=0
 INSTALL_ICONS=1
 VARIANT="-Dark"
+BUNDLE_DIR=""
+OFFLINE=0
+ICON_FILE_NAMES=( "MacTahoe-icon-theme.tar.gz" "MacTahoe-icon-theme.tar" )
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTION]...
 
   -v, --variant VARIANT   Theme variant: dark or light (Default: dark)
+      --bundle DIR        Use files from a local bundle instead of downloading
+      --offline           Never use the network; warn if something is missing
       --no-layout         Keep the current panels instead of applying the macOS layout
       --no-icons          Skip installing the MacTahoe icon/cursor theme
       --enable-ssh        Install and enable sshd (sudo)
@@ -39,6 +44,8 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-layout) APPLY_LAYOUT=0; shift ;;
     --no-icons) INSTALL_ICONS=0; shift ;;
+    --bundle) BUNDLE_DIR="$2"; shift 2 ;;
+    --offline) OFFLINE=1; shift ;;
     --enable-ssh) ENABLE_SSH=1; shift ;;
     --reboot) REBOOT=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -51,7 +58,89 @@ LOOKFEEL_ID="com.github.vinceliuice.MacTahoe${VARIANT}"
 KVANTUM_THEME="MacTahoe"
 [[ "${VARIANT}" == "-Dark" ]] && KVANTUM_THEME="MacTahoeDark"
 
-say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+detect_bundle() {
+  local parent
+  [[ -z "${BUNDLE_DIR}" ]] || return 0
+  parent="$(cd "${REPO_ROOT}/.." 2>/dev/null && pwd)"
+  [[ -n "${parent}" && -d "${parent}" ]] || return 0
+  if ls "${parent}"/kvantum-*.rpm >/dev/null 2>&1; then
+    BUNDLE_DIR="${parent}"
+    return 0
+  fi
+  for name in "${ICON_FILE_NAMES[@]}"; do
+    if [[ -f "${parent}/${name}" ]]; then
+      BUNDLE_DIR="${parent}"
+      return 0
+    fi
+  done
+}
+
+detect_bundle
+[[ -n "${BUNDLE_DIR}" ]] && say "Bundle local detectado en ${BUNDLE_DIR}"
+
+find_bundle_icons() {
+  local name
+  [[ -n "${BUNDLE_DIR}" ]] || return 1
+  for name in "${ICON_FILE_NAMES[@]}"; do
+    if [[ -f "${BUNDLE_DIR}/${name}" ]]; then
+      printf '%s' "${BUNDLE_DIR}/${name}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+install_kvantum() {
+  if rpm -q kvantum >/dev/null 2>&1; then
+    say "kvantum ya instalado"
+    return 0
+  fi
+  local rpms=()
+  if [[ -n "${BUNDLE_DIR}" ]]; then
+    shopt -s nullglob
+    rpms=("${BUNDLE_DIR}"/kvantum-*.rpm)
+    shopt -u nullglob
+  fi
+  if [[ ${#rpms[@]} -gt 0 ]]; then
+    say "Instalando kvantum desde el bundle (local)"
+    if run_root dnf install -y --disablerepo='*' "${rpms[@]}" || run_root rpm -Uvh --replacepkgs "${rpms[@]}"; then
+      if rpm -q kvantum >/dev/null 2>&1; then
+        return 0
+      fi
+    fi
+    warn "No se pudo instalar kvantum desde el bundle"
+  fi
+  if [[ "${OFFLINE}" -eq 1 ]]; then
+    warn "Modo offline: sigo sin kvantum (luego: sudo dnf install kvantum)"
+    return 0
+  fi
+  say "Instalando kvantum desde los repos (sudo)"
+  run_root dnf install -y kvantum || warn "kvantum no se pudo instalar; el resto del tema se aplica igual"
+}
+
+install_icon_theme() {
+  if [[ -d "${HOME}/.local/share/icons/MacTahoe" ]]; then
+    say "Iconos MacTahoe ya instalados"
+    return 0
+  fi
+  local tarball flags="z"
+  mkdir -p "${ICON_CACHE}"
+  if tarball="$(find_bundle_icons)"; then
+    say "Instalando iconos y cursores desde el bundle"
+    [[ "${tarball}" == *.tar.gz ]] || flags=""
+    tar x"${flags}"f "${tarball}" -C "${ICON_CACHE}" --strip-components=1
+  else
+    if [[ "${OFFLINE}" -eq 1 ]]; then
+      warn "Modo offline y sin tarball de iconos: omito iconos y cursores"
+      return 0
+    fi
+    say "Descargando MacTahoe icon theme"
+    curl -fsSL "${ICON_REPO_URL}" -o "${ICON_CACHE}.tar.gz"
+    tar xzf "${ICON_CACHE}.tar.gz" -C "${ICON_CACHE}" --strip-components=1
+  fi
+  ( cd "${ICON_CACHE}" && ./install.sh >/dev/null ) || warn "Fallo el instalador de iconos"
+  [[ -d "${HOME}/.local/share/icons/MacTahoe" ]] || warn "No quedaron instalados los iconos MacTahoe"
+}
 warn() { printf '\033[1;33m    %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
@@ -113,6 +202,10 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 tar czf "${BACKUP_DIR}/kde-${STAMP}.tar.gz" -C "${HOME}" .config .local/share/plasma .config/Kvantum 2>/dev/null || true
 say "Backup en ${BACKUP_DIR}/kde-${STAMP}.tar.gz"
 
+if [[ "${OFFLINE}" -eq 1 ]]; then
+  say "Modo offline activo: no se usa la red"
+fi
+
 if [[ "${ENABLE_SSH}" -eq 1 ]]; then
   say "Instalando y activando sshd"
   run_root dnf install -y openssh-server
@@ -122,24 +215,8 @@ if [[ "${ENABLE_SSH}" -eq 1 ]]; then
 fi
 
 if [[ "${INSTALL_ICONS}" -eq 1 ]]; then
-  if rpm -q kvantum >/dev/null 2>&1; then
-    say "kvantum ya instalado"
-  else
-    say "Instalando kvantum (sudo)"
-    run_root dnf install -y kvantum
-  fi
-
-  if [[ -d "${HOME}/.local/share/icons/MacTahoe" ]]; then
-    say "Iconos MacTahoe ya instalados"
-  else
-    say "Descargando MacTahoe icon theme"
-    mkdir -p "$(dirname "${ICON_CACHE}")"
-    mkdir -p "${ICON_CACHE}"
-    curl -fsSL "${ICON_REPO_URL}" | tar xz -C "${ICON_CACHE}" --strip-components=1
-    say "Instalando iconos y cursores MacTahoe"
-    ( cd "${ICON_CACHE}" && ./install.sh >/dev/null )
-    [[ -d "${HOME}/.local/share/icons/MacTahoe" ]] || die "Fallo la instalacion de iconos"
-  fi
+  install_kvantum
+  install_icon_theme
 fi
 
 say "Instalando el tema ${PLASMA_THEME}"

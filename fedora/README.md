@@ -35,6 +35,7 @@ sobre una máquina Fedora con KDE Plasma 6.
 - [Requisitos](#requisitos)
 - [Mapa de archivos](#mapa-de-archivos)
 - [Guía rápida](#guía-rápida)
+- [Instalación sin red: bundle autocontenido](#instalación-sin-red-bundle-autocontenido)
 - [De cero con GNOME Boxes](#de-cero-con-gnome-boxes)
 - [Referencia de opciones](#referencia-de-opciones)
 - [Qué hace exactamente el script](#qué-hace-exactamente-el-script)
@@ -74,7 +75,9 @@ sobre una máquina Fedora con KDE Plasma 6.
 | --- | --- | --- |
 | `fedora/setup-mactahoe.sh` | La propia VM | Provisionamiento completo: dependencias, iconos, tema, Global Theme, claves, layout, fondo y recarga |
 | `fedora/setup-remote.sh` | El host | Copia este repo a `~/MacTahoe-kde` en la VM (sin `.git`) y ejecuta el script anterior por SSH con TTY |
+| `fedora/build-bundle.sh` | El host | Descarga aquí kvantum y el tema de iconos y genera un **paquete autocontenido** para instalar sin red |
 | `fedora/README.md` | — | Este documento |
+| `fedora/CHANGELOG.md` | — | Historial de versiones |
 | `install.sh` (raíz) | La VM | Instalador original del tema (modo usuario → `~/.local/...`); lo invoca el script de provisioning |
 | `uninstall.sh` (raíz) | La VM | Desinstala el tema del autor original |
 
@@ -151,6 +154,8 @@ cd ~/MacTahoe-kde && ./fedora/setup-mactahoe.sh
 | Opción | Qué hace |
 | --- | --- |
 | `-v dark` / `-v light` (`--variant`) | Variante del tema. Por defecto `dark`. `light` usa iconos/cursores `MacTahoe-light`, Kvantum `MacTahoe` y `widgetStyle=kvantum`. |
+| `--bundle DIR` | Usa los ficheros de un bundle local (RPM de kvantum y tarball de iconos) en vez de descargarlos |
+| `--offline` | Prohíbe la red: si algo falta en el bundle, avisa y continúa |
 | `--no-layout` | Conserva tus paneles actuales; aplica sólo el aspecto (colores, tema Plasma, Aurorae, Kvantum, iconos, fondo). |
 | `--no-icons` | No descarga ni instala el tema de iconos/cursores compañero. |
 | `--enable-ssh` | Instala y activa `sshd` y abre el servicio en el cortafuegos. |
@@ -203,6 +208,54 @@ Todas las opciones se pueden pasar igualmente a `setup-remote.sh`, que las reenv
 | `~/.config/plasma-org.kde.plasma.desktop-appletsrc` | Paneles (eliminación y creación) e imagen de fondo + `FillMode` |
 | `~/.local/share/` | `color-schemes/`, `plasma/desktoptheme/`, `plasma/look-and-feel/`, `plasma/layout-templates/`, `wallpapers/`, `aurorae/themes/`, `icons/` |
 | `~/.config/Kvantum/` | Tema de Kvantum y `kvantum.kvconfig` |
+
+## Instalación sin red: bundle autocontenido
+
+Para máquinas sin internet (o para no depender de los repos en una Branched), genera en **tu máquina** un único
+fichero con todo y cópialo.
+
+> [!TIP] Contenido
+> `MacTahoe-kde/` (tema parcheado + scripts) · `MacTahoe-icon-theme.tar.gz` · `kvantum-*.rpm` ·
+> `install.sh` · `INSTALL.md` · `SHA256SUMS.txt`
+
+### 1 · Construir (host)
+
+```bash
+./fedora/build-bundle.sh                      # Fedora 44 y kvantum 1.1.6 por defecto
+# ./fedora/build-bundle.sh --fedora 45 --kvantum 1.1.7 --version 1.2.0
+# ./fedora/build-bundle.sh --no-cache         # ignora la cache de descargas
+```
+
+Opciones: `--fedora`, `--kvantum`, `--version`, `--out-dir`, `--cache-dir`, `--no-cache`.
+Las descargas se cachean en `~/.cache/mactahoe-bundle` para rehacer el bundle al instante.
+
+### 2 · Enviar (host)
+
+```bash
+rsync -av dist/MacTahoe-kde-bundle-<versión>.tar.gz usuario@IP:~/
+```
+
+### 3 · Instalar (VM)
+
+```bash
+tar xzf ~/MacTahoe-kde-bundle-<versión>.tar.gz
+cd MacTahoe-kde-bundle
+./install.sh                    # tema oscuro + layout macOS, sin descargar nada
+```
+
+Variantes útiles:
+
+```bash
+./install.sh -v light           # tema claro
+./install.sh --no-layout        # conserva tus paneles actuales
+./install.sh --offline          # falla limpio (avisa) en vez de descargar si algo falta
+```
+
+> [!NOTE] Qué hace `install.sh`
+> Es un envoltorio: ejecuta `./MacTahoe-kde/fedora/setup-mactahoe.sh --bundle "$(pwd)"`, de modo que kvantum se
+> instala desde los RPM incluidos (`dnf install --disablerepo='*'` con fallback a `rpm -Uvh`) y los iconos y
+> cursores desde el tarball incluido. Si no pasas `--bundle`, el propio script lo detecta cuando hay
+> `kvantum-*.rpm` o `MacTahoe-icon-theme.tar.gz` junto al repo.
 
 ## Idempotencia y cambio de variante
 
