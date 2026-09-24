@@ -1,28 +1,43 @@
 #!/usr/bin/env bash
-# Enable (or disable) KWin's built-in Magic Lamp minimize effect (macOS-like genie animation).
-# Meant to run inside the target machine, as the regular user, inside (or against) a Plasma session.
+# Enable (or disable) the Magic Lamp minimize effect: either KWin's built-in
+# "magiclamp" or the more macOS/Compiz-like external "Yet Another Magic Lamp".
+# Meant to run inside the target machine, as the regular user, inside a Plasma session.
 
 set -euo pipefail
 
 APPLY=enable
 DURATION=""
+CHOICE=auto
 FORCE_SOFTWARE=0
+
+BUILTIN_ID="magiclamp"
+YAML_ID="kwin4_effect_yetanothermagiclamp"
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTION]...
 
-  --disable           Revert to the default minimize animation (Squash)
-  --duration MS       Animation duration in milliseconds (default: KWin default, 250ms)
+  --yaml              Use the external effect "Yet Another Magic Lamp"
+                      (${YAML_ID}); requires it to be installed
+                      (koryboc/kwin-effects-yet-another-magic-lamp-reloaded) and
+                      requires a KWin restart / re-login after installing it.
+  --builtin           Use KWin's built-in magiclamp effect.
+  --disable           Revert to the default minimize animation (Squash).
+  --duration MS       Animation duration in milliseconds (default: the effect's own).
   --force-software    If the GPU is a software renderer, set KWIN_EFFECTS_FORCE_ANIMATIONS=1
                       (requires logging out and back in).
   -h, --help          Show this help
+
+Default: use Yet Another Magic Lamp if available, otherwise fall back to the
+built-in magiclamp.
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --disable) APPLY=disable; shift ;;
+    --yaml) CHOICE=yaml; shift ;;
+    --builtin) CHOICE=builtin; shift ;;
     --duration) DURATION="$2"; shift 2 ;;
     --force-software) FORCE_SOFTWARE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -86,6 +101,40 @@ animations_unsupported() {
   return 1
 }
 
+select_effect() {
+  case "${CHOICE}" in
+    builtin)
+      EFFECT_ID="${BUILTIN_ID}"
+      ;;
+    yaml)
+      effect_available "${YAML_ID}" || die \
+  "El efecto 'Yet Another Magic Lamp' no aparece en kwin (${YAML_ID}).
+
+  ¿Está instalado? KWin solo lo catalogue al arrancar: cierra sesion o reinicia
+  la VM tras la instalacion y relanza este script."
+      EFFECT_ID="${YAML_ID}"
+      ;;
+    auto)
+      if effect_available "${YAML_ID}"; then
+        EFFECT_ID="${YAML_ID}"
+      else
+        EFFECT_ID="${BUILTIN_ID}"
+      fi
+      ;;
+  esac
+}
+
+minimize_ids() { printf '%s\n' "${BUILTIN_ID}" "${YAML_ID}" "squash"; }
+
+other_minimize_ids() {
+  local id
+  while read -r id; do
+    [[ "${id}" == "${EFFECT_ID}" ]] || printf '%s\n' "${id}"
+  done < <(minimize_ids)
+}
+
+set_plugin_flag() { kwriteconfig6 --file kwinrc --group Plugins --key "${1}Enabled" "${2}"; }
+
 if [[ -n "${DURATION}" ]] && ! [[ "${DURATION}" =~ ^[0-9]+$ ]]; then
   die "--duration debe ser un numero de milisegundos"
 fi
@@ -95,19 +144,29 @@ locate_session
 command -v kwriteconfig6 >/dev/null || die "No encuentro kwriteconfig6"
 pgrep -x kwin_wayland >/dev/null || die "No hay una sesion de KWin Wayland activa"
 
-say "Efecto integrado Magic Lamp disponible en kwin"
-effect_available magiclamp \
-  || die "Tu kwin no incorpora el efecto magiclamp"
+select_effect
 
 if [[ "${APPLY}" == "enable" ]]; then
-  say "Activando Magic Lamp (y desactivando Squash, grupo exclusivo minimize)"
-  kwriteconfig6 --file kwinrc --group Plugins --key magiclampEnabled true
-  kwriteconfig6 --file kwinrc --group Plugins --key squashEnabled false
+  if [[ "${EFFECT_ID}" == "${YAML_ID}" ]]; then
+    say "Activando 'Yet Another Magic Lamp' ($(basename "${YAML_ID}")) y desactivando el resto (grupo exclusivo minimize)"
+  else
+    say "Activando el Magic Lamp integrado de kwin y desactivando el resto (grupo exclusivo minimize)"
+  fi
+  set_plugin_flag "${EFFECT_ID}" true
+  local_effect="${EFFECT_ID}"
+  while read -r id; do
+    set_plugin_flag "${id}" false
+  done < <(other_minimize_ids)
   if [[ -n "${DURATION}" ]]; then
     say "Duracion de la animacion: ${DURATION} ms"
-    kwriteconfig6 --file kwinrc --group Effect-magiclamp --key AnimationDuration "${DURATION}"
+    if [[ "${EFFECT_ID}" == "${YAML_ID}" ]]; then
+      kwriteconfig6 --file kwinrc --group Effect-YetAnotherMagicLamp --key Duration "${DURATION}"
+      kwriteconfig6 --file kwinrc --group Effect-YetAnotherMagicLamp --key StretchDuration "${DURATION}"
+    else
+      kwriteconfig6 --file kwinrc --group Effect-magiclamp --key AnimationDuration "${DURATION}"
+    fi
   fi
-  if effect_loaded magiclamp || try_load magiclamp; then
+  if effect_loaded "${EFFECT_ID}" || try_load "${EFFECT_ID}"; then
     :
   elif animations_unsupported; then
     warn "El compositor no puede animar: kwin usa un renderizador GL por SOFTWARE"
@@ -126,19 +185,27 @@ if [[ "${APPLY}" == "enable" ]]; then
       say "  2. Relanza con --force-software para usar CPU (requiere logout/in)."
     fi
   else
-    warn "magiclamp no se pudo cargar por una razon desconocida; revisa journalctl -u plasma-kwin_wayland"
+    warn "${EFFECT_ID} no se pudo cargar por una razon desconocida;"
+    warn "revisa journalctl -u plasma-kwin_wayland"
   fi
-  if effect_loaded squash; then
-    try_unload squash
-  fi
+  while read -r id; do
+    effect_loaded "${id}" && try_unload "${id}"
+  done < <(other_minimize_ids)
   run_qdbus /KWin org.kde.KWin.reconfigure >/dev/null
 else
   say "Desactivando Magic Lamp (vuelvo a Squash)"
-  kwriteconfig6 --file kwinrc --group Plugins --key magiclampEnabled false
-  kwriteconfig6 --file kwinrc --group Plugins --key squashEnabled true
-  if effect_loaded magiclamp; then
-    try_unload magiclamp
+  set_plugin_flag "${EFFECT_ID}" false
+  set_plugin_flag "squash" true
+  if effect_loaded "${EFFECT_ID}"; then
+    try_unload "${EFFECT_ID}"
   fi
+  for id in "${BUILTIN_ID}" "${YAML_ID}"; do
+    [[ "${id}" == "${EFFECT_ID}" ]] && continue
+    if effect_loaded "${id}"; then
+      try_unload "${id}"
+      set_plugin_flag "${id}" false
+    fi
+  done
   if ! effect_loaded squash; then
     try_load squash || warn "squash no quiso volver a cargar (situacion esperada si no hay acel. 3D)"
   fi
@@ -149,17 +216,23 @@ fi
 sleep 2
 
 say "Estado final"
-printf '  magiclampEnabled : %s\n' "$(kreadconfig6 --file kwinrc --group Plugins --key magiclampEnabled)"
-printf '  squashEnabled    : %s\n' "$(kreadconfig6 --file kwinrc --group Plugins --key squashEnabled)"
-printf '  AnimationDuration: %s\n' "$(kreadconfig6 --file kwinrc --group Effect-magiclamp --key AnimationDuration)"
-if effect_loaded magiclamp; then
-  printf '  Magic Lamp       : cargado (activo)\n'
-  [[ "${APPLY}" == "enable" ]] && say "Listo. Minimiza una ventana y veras el efecto lámpara mágica hacia el dock."
+printf '  Efecto minimizar  : %s\n' "${EFFECT_ID}"
+printf '  magiclampEnabled  : %s\n' "$(kreadconfig6 --file kwinrc --group Plugins --key magiclampEnabled)"
+printf '  yamlEnabled       : %s\n' "$(kreadconfig6 --file kwinrc --group Plugins --key ${YAML_ID}Enabled)"
+printf '  squashEnabled     : %s\n' "$(kreadconfig6 --file kwinrc --group Plugins --key squashEnabled)"
+if [[ "${EFFECT_ID}" == "${YAML_ID}" ]]; then
+  printf '  Duration (YAML)   : %s\n' "$(kreadconfig6 --file kwinrc --group Effect-YetAnotherMagicLamp --key Duration)"
 else
-  warn "Magic Lamp no esta cargado en kwin"
+  printf '  AnimationDuration : %s\n' "$(kreadconfig6 --file kwinrc --group Effect-magiclamp --key AnimationDuration)"
+fi
+if effect_loaded "${EFFECT_ID}"; then
+  printf '  %-17s: cargado (activo)\n' "${EFFECT_ID}"
+  [[ "${APPLY}" == "enable" ]] && say "Listo. Minimiza una ventana y veras la animacion dirigida al dock."
+else
+  warn "${EFFECT_ID} no esta cargado en kwin"
 fi
 if effect_loaded squash; then
-  printf '  Squash           : cargado\n'
+  printf '  Squash            : cargado\n'
 else
-  printf '  Squash           : descargado\n'
+  printf '  Squash            : descargado\n'
 fi
