@@ -39,7 +39,7 @@ install() {
     SCHEMES_DIR="${dest}/share/color-schemes"
     PLASMA_DIR="${dest}/share/plasma/desktoptheme"
     PLASMOIDS_DIR="${dest}/share/plasma/plasmoids"
-    LAYOUT_DIR="/usr/share/plasma/layout-templates"
+    LAYOUT_DIR="${dest}/share/plasma/layout-templates"
     LOOKFEEL_DIR="${dest}/share/plasma/look-and-feel"
     KVANTUM_DIR="${dest}/share/Kvantum"
     WALLPAPER_DIR="${dest}/share/wallpapers"
@@ -122,8 +122,8 @@ while [[ "$#" -gt 0 ]]; do
       shift 2
       ;;
     -n|--name)
-      name="${1}"
-      shift
+      name="${2}"
+      shift 2
       ;;
     -c|--color)
       shift
