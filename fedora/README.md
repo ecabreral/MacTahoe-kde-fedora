@@ -1,100 +1,273 @@
+---
+title: MacTahoe-kde en Fedora KDE
+aliases:
+  - MacTahoe Fedora
+  - provisioning MacTahoe
+tags:
+  - fedora
+  - kde-plasma
+  - plasma6
+  - boxes
+  - libvirt
+  - theming
+  - mactahoe
+created: 2026-09-24
+updated: 2026-09-24
+---
+
 # MacTahoe-kde en Fedora KDE (Plasma 6 / Fedora 44)
 
-Este directorio contiene el aprovisionamiento reproducible del tema `MacTahoe-kde` sobre una máquina
-Fedora con KDE Plasma 6 (probado en **Fedora 44, Plasma 6.6.4, Qt 6.10, Wayland** dentro de GNOME Boxes).
+Guía y aprovisionamiento **reproducible** del tema [MacTahoe-kde](https://github.com/vinceliuice/MacTahoe-kde)
+sobre una máquina Fedora con KDE Plasma 6.
 
-Incluye también los parches locales que hacen falta para Plasma 6.6 (ver [Parches locales](#parches-locales)).
+> [!NOTE] Estado del entorno validado
+> Probado de extremo a extremo en **Fedora 44 · Plasma 6.6.4 · Qt 6.10.2 · sesión Wayland**, dentro de una VM de
+> **GNOME Boxes** (libvirt/qemu, red NAT `virbr0`). Ese mismo procedimiento se ejecutó tres veces sobre la misma
+> máquina (dark → light → dark) sin dejar residuos.
 
-## Requisitos en la máquina de destino
+> [!WARNING] Este repo es un fork local del original
+> Los ficheros del tema son del autor original (Vince Liuice). Aquí sólo se añaden **parches de compatibilidad**
+> y los scripts de `fedora/`. Todo el trabajo vive en la rama local `fedora-44-plasma-6.6` y **no se sube a
+> `origin`**.
 
-- Fedora 44 (o superior) con el escritorio KDE Plasma 6 instalado y **sesión gráfica iniciada**.
-- Usuario con `sudo`.
-- `curl`, `tar`, `gdbus`, `kwriteconfig6`/`kreadconfig6`, `lookandfeeltool`, `pgrep` (vienen de serie en la
-  instalación KDE de Fedora).
-- Red (para descargar kvantum y el tema de iconos).
+## Índice
 
-## Instalación en una VM nueva: dos formas
+- [Requisitos](#requisitos)
+- [Mapa de archivos](#mapa-de-archivos)
+- [Guía rápida](#guía-rápida)
+- [De cero con GNOME Boxes](#de-cero-con-gnome-boxes)
+- [Referencia de opciones](#referencia-de-opciones)
+- [Qué hace exactamente el script](#qué-hace-exactamente-el-script)
+- [Rutas y claves que se modifican](#rutas-y-claves-que-se-modifican)
+- [Idempotencia y cambio de variante](#idempotencia-y-cambio-de-variante)
+- [Verificación](#verificación)
+- [Volver atrás](#volver-atrás)
+- [Solución de problemas](#solución-de-problemas)
+- [Parches locales incluidos](#parches-locales-incluidos)
+- [Compatibilidad y mantenimiento](#compatibilidad-y-mantenimiento)
+- [Alcance y fuera de alcance](#alcance-y-fuera-de-alcance)
+- [Referencias](#referencias)
 
-### A) Desde otra máquina (recomendado): un solo script
+## Requisitos
 
-Requiere acceso SSH por clave (`ssh-copy-id usuario@IP`):
+### En la máquina de destino (la VM)
+
+| Requisito | Nota |
+| --- | --- |
+| Fedora 44 o superior con KDE Plasma 6 | Validado con Plasma 6.6.4 |
+| **Sesión gráfica iniciada** | El script necesita el bus de sesión (`/run/user/<uid>/bus`) para hablar con plasmashell y kwin |
+| Usuario con `sudo` | Para instalar `kvantum` (y `sshd` si usas `--enable-ssh`) |
+| Red de salida | Descarga kvantum y el paquete de iconos |
+| Herramientas de serie | `curl`, `tar`, `gdbus`, `kwriteconfig6`, `kreadconfig6`, `lookandfeeltool`, `pgrep` |
+
+> [!TIP]
+> No hace falta `git` en la VM: los iconos se descargan como tarball y este repo se copia con `rsync` desde el host.
+
+### En el host (si usas `setup-remote.sh`)
+
+- `ssh` con acceso por clave y `rsync`.
+- Opcional: `virsh` si la VM está en libvirt/Boxes (para descubrir la IP y hacer capturas de pantalla).
+
+## Mapa de archivos
+
+| Archivo | Se ejecuta en | Qué hace |
+| --- | --- | --- |
+| `fedora/setup-mactahoe.sh` | La propia VM | Provisionamiento completo: dependencias, iconos, tema, Global Theme, claves, layout, fondo y recarga |
+| `fedora/setup-remote.sh` | El host | Copia este repo a `~/MacTahoe-kde` en la VM (sin `.git`) y ejecuta el script anterior por SSH con TTY |
+| `fedora/README.md` | — | Este documento |
+| `install.sh` (raíz) | La VM | Instalador original del tema (modo usuario → `~/.local/...`); lo invoca el script de provisioning |
+| `uninstall.sh` (raíz) | La VM | Desinstala el tema del autor original |
+
+Variables de entorno reconocidas:
+
+| Variable | Valor por defecto | Para qué |
+| --- | --- | --- |
+| `REMOTE_DIR` | `MacTahoe-kde` | Directorio del repo en la máquina remota (`setup-remote.sh`) |
+
+## Guía rápida
+
+Desde el host, contra una Fedora KDE nueva con SSH por clave:
 
 ```bash
-ssh-copy-id usuario@IP_DE_LA_VM          # una sola vez
-./fedora/setup-remote.sh usuario@IP_DE_LA_VM
+ssh-copy-id usuario@IP_DE_LA_VM                 # una sola vez
+./fedora/setup-remote.sh usuario@IP_DE_LA_VM --enable-ssh
 ```
 
-Ese script:
-1. Verifica que hay SSH sin contraseña.
-2. Copia este repo (sin `.git`) a `~/MacTahoe-kde` en la VM.
-3. Ejecuta dentro de la VM `fedora/setup-mactahoe.sh` con TTY, para que `sudo` pregunte la contraseña normalmente.
-
-### B) Desde dentro de la propia VM
+Desde dentro de la propia VM (con el repo ya copiado):
 
 ```bash
-# (si el repo ya esta en ~/MacTahoe-kde)
 cd ~/MacTahoe-kde && ./fedora/setup-mactahoe.sh
 ```
 
-## Opciones útiles
+> [!IMPORTANT]
+> `--enable-ssh` instala y arranca `sshd` dentro de la VM; es lo único que hay que hacer a mano (o con esa opción)
+> si la máquina es recién instalada, porque Fedora Workstation/KDE trae `sshd` **desactivado** por defecto.
+
+## De cero con GNOME Boxes
+
+1. **Crea la VM** con la ISO *Fedora KDE Plasma Desktop* y completa el asistente de instalación.
+2. **Activa SSH dentro de la VM** (abrir Konsole y ejecutar):
+
+   ```bash
+   sudo dnf install -y openssh-server
+   sudo systemctl enable --now sshd
+   sudo firewall-cmd --permanent --add-service=ssh && sudo firewall-cmd --reload
+   ```
+
+3. **Averigua la IP** desde el host:
+
+   ```bash
+   virsh list --all
+   virsh domifaddr <dominio> --source arp        # ej. 192.168.122.109
+   ```
+
+4. **Copia tu clave y crea un alias** (opcional pero cómodo):
+
+   ```bash
+   ssh-copy-id usuario@IP
+   cat >> ~/.ssh/config <<'EOF'
+   Host fedora-kde
+       HostName IP_DE_LA_VM
+       User usuario
+       IdentityFile ~/.ssh/id_ed25519
+   EOF
+   ```
+
+5. **Ejecuta el aprovisionamiento** desde el host:
+
+   ```bash
+   ./fedora/setup-remote.sh fedora-kde --variant dark
+   ```
+
+6. **Verifica** (ver [Verificación](#verificación)).
+
+> [!TIP] IP fija para que no cambie al reiniciar
+> La IP es DHCP de `virbr0`. Para reservarla hace falta root en el host:
+> `sudo virsh net-update default add ip-dhcp-host "<mac> <ip>" --live --config`
+> (MAC e IP actuales salen de `virsh domifaddr <dominio> --source arp`).
+
+## Referencia de opciones
 
 | Opción | Qué hace |
 | --- | --- |
-| `-v dark` / `-v light` | Variante del tema (por defecto `dark`). La clara usa iconos/cursores `MacTahoe-light`, kvantum `MacTahoe` y `widgetStyle=kvantum`. |
-| `--no-layout` | No toca los paneles actuales; sólo aplica el aspecto (colores, tema Plasma, Aurorae, Kvantum, iconos). |
-| `--no-icons` | No instala el tema de iconos/cursores compañero. |
-| `--enable-ssh` | Instala y activa `sshd` + abre el servicio en el cortafuegos (útil en una VM recién creada). |
-| `--reboot` | Reinicia al terminar. |
+| `-v dark` / `-v light` (`--variant`) | Variante del tema. Por defecto `dark`. `light` usa iconos/cursores `MacTahoe-light`, Kvantum `MacTahoe` y `widgetStyle=kvantum`. |
+| `--no-layout` | Conserva tus paneles actuales; aplica sólo el aspecto (colores, tema Plasma, Aurorae, Kvantum, iconos, fondo). |
+| `--no-icons` | No descarga ni instala el tema de iconos/cursores compañero. |
+| `--enable-ssh` | Instala y activa `sshd` y abre el servicio en el cortafuegos. |
+| `--reboot` | Reinicia la máquina al terminar. |
+| `-h` / `--help` | Muestra la ayuda. |
 
-Ejemplo típico para una VM nueva, desde el host:
+Todas las opciones se pueden pasar igualmente a `setup-remote.sh`, que las reenvía al script remoto:
 
 ```bash
-./fedora/setup-remote.sh xmoul@192.168.122.109 --enable-ssh --variant dark
+./fedora/setup-remote.sh fedora-kde --variant light --no-layout
 ```
 
 ## Qué hace exactamente el script
 
-1. **Localiza la sesión** Plasma leyendo `/run/user/<uid>/bus` y el socket Wayland (por eso funciona también
-   por SSH mientras la sesión gráfica está viva).
+1. **Localiza la sesión Plasma**: lee `/run/user/<uid>/bus` y el primer socket `wayland-*` disponible. Por eso
+   funciona también ejecutado por SSH mientras la sesión gráfica sigue viva.
 2. **Backup** de `~/.config`, `~/.local/share/plasma` y `~/.config/Kvantum` en
-   `~/.local/state/mactahoe/backups/kde-<fecha>.tar.gz`.
-3. **Dependencias**: `dnf install kvantum` (por `sudo`).
-4. **Iconos y cursores**: descarga el tarball de `vinceliuice/MacTahoe-icon-theme`, ejecuta su `install.sh`
-   en modo usuario y deja `MacTahoe`, `MacTahoe-light` y `MacTahoe-dark` en `~/.local/share/icons`
-   (el paquete de iconos incluye dentro el directorio `cursors/`, por eso el cursor se llama igual que el tema
-   de iconos).
-5. **Tema**: ejecuta el `install.sh` de este repo (modo usuario → `~/.local/share/{color-schemes,plasma,wallpapers,aurorae}`
-   y `~/.config/Kvantum`).
-6. **Global Theme**: `lookandfeeltool -a com.github.vinceliuice.MacTahoe-Dark`.
-7. **Claves de `defaults`**: en Plasma 6.6 `lookandfeeltool` sólo aplica colores y `LookAndFeelPackage`;
-   el script parsea el fichero `contents/defaults` del paquete instalado y escribe cada entrada con
-   `kwriteconfig6` (iconos, cursor, `widgetStyle`, `plasmarc` y la decoración de `kwinrc`).
-8. **Kvantum**: `~/.config/Kvantum/kvantum.kvconfig` → `theme=MacTahoeDark` (o `MacTahoe` en claro).
-9. **Layout macOS**: borra los paneles existentes y ejecuta, vía DBus (`org.kde.PlasmaShell.evaluateScript`),
-   el `desktop-layout.js` del look-and-feel → panel superior + dock inferior (64 px, `fit`, `dodgewindows`).
-10. **Fondo de pantalla** con `FillMode=2` (recorta para rellenar) para evitar las franjas de letterbox.
-11. **Recarga** KWin (`reconfigure`) y `plasmashell`, y muestra el estado final.
+   `~/.local/state/mactahoe/backups/kde-<AAAAMMDD-HHMMSS>.tar.gz`.
+3. **Dependencias**: instala `kvantum` con `dnf` (usa `sudo` si no eres root).
+4. **Iconos y cursores**: descarga el tarball de `vinceliuice/MacTahoe-icon-theme` en
+   `~/.cache/mactahoe/`, ejecuta su `install.sh` en modo usuario y deja `MacTahoe`, `MacTahoe-light` y
+   `MacTahoe-dark` en `~/.local/share/icons`. Cada tema de iconos lleva dentro su directorio `cursors/`, por eso
+   el cursor se llama igual que el tema de iconos.
+5. **Instala el tema** con el `install.sh` del repo (modo usuario): esquemas de color, `desktoptheme`,
+   `look-and-feel`, plantillas de layout, `aurorae`, wallpapers y Kvantum.
+6. **Aplica el Global Theme**: `lookandfeeltool -a com.github.vinceliuice.MacTahoe-Dark`.
+7. **Reescribe las claves de `defaults`**: en Plasma 6.6 `lookandfeeltool` sólo aplica colores y
+   `LookAndFeelPackage`, así que el script **parsea el fichero `contents/defaults`** del paquete instalado y
+   escribe cada entrada con `kwriteconfig6` (iconos, cursor, `widgetStyle`, tema Plasma y decoración de kwin).
+8. **Configura Kvantum** en `~/.config/Kvantum/kvantum.kvconfig` (`MacTahoeDark` o `MacTahoe`).
+9. **Aplica el layout macOS** (salvo `--no-layout`): guarda `plasma-org.kde.plasma.desktop-appletsrc`, borra los
+   paneles existentes y ejecuta el `desktop-layout.js` del look-and-feel vía DBus
+   (`org.kde.PlasmaShell.evaluateScript`) → **panel superior de 44 px** + **dock inferior de 64 px**
+   (`lengthMode=fit`, `hiding=dodgewindows`) con el gestor de tareas y sus lanzadores.
+10. **Ajusta el fondo** con `FillMode=2` para que rellene la pantalla sin franjas.
+11. **Recarga** kwin (`org.kde.KWin.reconfigure`) y `plasmashell`, y **imprime el estado final**.
+
+> [!NOTE] Idempotencia del paso de iconos
+> Si ya existe `~/.local/share/icons/MacTahoe`, el script **no** los reinstala. Para forzar una actualización:
+> `rm -rf ~/.local/share/icons/MacTahoe*` y vuelve a ejecutarlo.
+
+## Rutas y claves que se modifican
+
+| Fichero | Entradas que se escriben |
+| --- | --- |
+| `~/.config/kdeglobals` | `[Icons] Theme`, `[KDE] LookAndFeelPackage`, `[KDE] widgetStyle`, `[General] ColorScheme` (+ colores del esquema) |
+| `~/.config/kcminputrc` | `[Mouse] cursorTheme` |
+| `~/.config/plasmarc` | `[Theme] name` |
+| `~/.config/kwinrc` | `[org.kde.kdecoration2]` → `library=org.kde.kwin.aurorae`, `theme=__aurorae__svg__MacTahoe-Dark`, `BorderSize`, `ButtonsOnLeft`, `ButtonsOnRight`; `[DesktopSwitcher]`/`[WindowSwitcher]` |
+| `~/.config/plasma-org.kde.plasma.desktop-appletsrc` | Paneles (eliminación y creación) e imagen de fondo + `FillMode` |
+| `~/.local/share/` | `color-schemes/`, `plasma/desktoptheme/`, `plasma/look-and-feel/`, `plasma/layout-templates/`, `wallpapers/`, `aurorae/themes/`, `icons/` |
+| `~/.config/Kvantum/` | Tema de Kvantum y `kvantum.kvconfig` |
+
+## Idempotencia y cambio de variante
+
+El script se puede relanzar sin romper nada: reinstala los ficheros del tema, vuelve a escribir las claves y
+regenera los dos paneles (perderás cambios manuales de paneles, por eso hay backup y `--no-layout`).
+
+```bash
+./fedora/setup-remote.sh fedora-kde --variant light   # cambiar a la variante clara
+./fedora/setup-remote.sh fedora-kde --variant dark    # volver a la oscura
+```
+
+Validación real durante el desarrollo (sobre la misma VM):
+
+| Ejecución | Resultado |
+| --- | --- |
+| dark (1.ª) | 2 paneles `[top h=44] [bottom h=64]`, todo aplicado, sin franjas |
+| light | `MacTahoe-Light`, iconos `MacTahoe-light`, `widgetStyle=kvantum`, Kvantum `MacTahoe` |
+| dark (repetida) | Vuelve a `MacTahoe-Dark` sin residuos, plasmashell activo |
 
 ## Verificación
 
-Desde la máquina de destino (o por SSH):
+Valores esperados (oscilan según la variante elegida):
 
 ```bash
-kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage   # com.github.vinceliuice.MacTahoe-Dark
-kreadconfig6 --file plasmarc   --group Theme --key name               # MacTahoe-Dark
-kreadconfig6 --file kdeglobals --group Icons --key Theme              # MacTahoe-dark
-kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme   # __aurorae__svg__MacTahoe-Dark
+kreadconfig6 --file kdeglobals --group KDE       --key LookAndFeelPackage   # com.github.vinceliuice.MacTahoe-Dark
+kreadconfig6 --file kdeglobals --group General   --key ColorScheme          # MacTahoeDark
+kreadconfig6 --file kdeglobals --group Icons     --key Theme                # MacTahoe-dark
+kreadconfig6 --file kdeglobals --group KDE       --key widgetStyle          # kvantum-dark
+kreadconfig6 --file plasmarc   --group Theme     --key name                 # MacTahoe-Dark
+kreadconfig6 --file kcminputrc --group Mouse     --key cursorTheme          # MacTahoe-dark
+kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key library       # org.kde.kwin.aurorae
+kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme         # __aurorae__svg__MacTahoe-Dark
+grep -h '^theme=' ~/.config/Kvantum/kvantum.kvconfig                        # theme=MacTahoeDark
 ```
 
-Y desde el host, si la VM está en libvirt/Boxes:
+Paneles vivos por DBus:
 
 ```bash
-virsh screenshot <dominio> /tmp/vm.png     # si sale negro: la pantalla esta apagada,
-virsh qemu-monitor-command <dominio> --hmp 'sendkey ctrl'   # pulsa una tecla para despertarla
+gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
+  --method org.kde.PlasmaShell.evaluateScript \
+  'var ps=panels(); var o="paneles="+ps.length; for (var i=0;i<ps.length;i++){ o+=" ["+ps[i].location+" h="+ps[i].height+"]"; } print(o);'
 ```
 
-Truco: para comprobar franjas/paneles sin ver la imagen, analiza filas con Python/Pillow
-(media de color por fila) y compara antes/después.
+Comprobación visual desde el host (VM en libvirt/Boxes):
+
+```bash
+virsh screenshot <dominio> /tmp/vm.png
+# si sale negra es que la pantalla está en reposo:
+virsh qemu-monitor-command <dominio> --hmp 'sendkey ctrl'
+```
+
+> [!TIP] Cómo “mirar” la captura sin verla
+> Analiza la media de color por fila con Pillow: las franjas de letterbox o un panel mal pintado aparecen como
+> bandas de color plano (blanco/gris) arriba o abajo, mientras que el fondo correcto da degradados azules.
+>
+> ```python
+> from PIL import Image
+>
+> im = Image.open('/tmp/vm.png').convert('RGB')
+> def row(y):
+>     px = [im.getpixel((x, y)) for x in range(0, im.width, 20)]
+>     return tuple(round(sum(p[i] for p in px) / len(px)) for i in range(3))
+>
+> print(row(2), row(im.height // 2), row(im.height - 5))
+> ```
 
 ## Volver atrás
 
@@ -104,33 +277,79 @@ tar xzf ~/.local/state/mactahoe/backups/kde-<fecha>.tar.gz -C ~
 systemctl --user restart plasma-plasmashell.service
 ```
 
-## Incidencias conocidas y por qué están así
+Limpieza completa (opcional):
 
-| Problema | Causa | Solución aplicada |
+```bash
+rm -rf ~/.local/share/icons/MacTahoe* ~/.local/share/plasma/desktoptheme/MacTahoe* \
+       ~/.local/share/plasma/look-and-feel/com.github.vinceliuice.MacTahoe* ~/.config/Kvantum
+sudo dnf remove kvantum
+```
+
+## Solución de problemas
+
+| Síntoma | Causa | Arreglo |
 | --- | --- | --- |
-| El dock sale vacío y en el journal aparece `Could not find required file "mainscript" ... icontasks` | Plasma 6.6/Fedora 44 ya no trae el applet `org.kde.plasma.icontasks` (queda sólo un `metadata.json` suelto); el gestor de tareas es `org.kde.plasma.taskmanager`, compilado en `/usr/lib64/qt6/plugins/plasma/applets/` | Parche en los 3 ficheros de layout (`icontasks` → `taskmanager`) |
-| `lookandfeeltool` no aplica iconos, cursor, `widgetStyle`, tema Plasma ni decoración | En Plasma 6.6 sólo aplica el esquema de color y `LookAndFeelPackage` | El script reescribe todas las entradas del fichero `defaults` con `kwriteconfig6` |
-| Franja blanca arriba y abajo, que parece “otro panel” | El fondo 3840x2160 (16:9) se pintaba con `FillMode=1` (`KeepAspectRatio`) en una pantalla 16:10 → letterbox | `FillMode=2` |
-| Aurorae sigue activo tras `reconfigure` | Compatible en Plasma 6.6 (`/usr/lib64/qt6/plugins/org.kde.kdecoration3/org.kde.kwin.aurorae.so`) | Sin cambios; si kwin hiciera fallback, reescribiría `kwinrc` con `org.kde.breezedecoration` |
-| El tema de login (`sddm/`) no se puede usar | Esta instalación no tiene SDDM instalado | Fuera de alcance: `sudo dnf install sddm sddm-wayland-plasma` y aplicar `sddm/MacTahoe-6.0` |
+| `ERROR: No hay sesion grafica en /run/user/<uid>` | No hay sesión KDE iniciada (o se ejecuta desde tty) | Entra en la sesión gráfica y relanza; el script necesita el bus de sesión |
+| El dock aparece vacío y el journal muestra `Could not find required file "mainscript" ... icontasks` | Plasma 6.6/Fedora 44 ya no trae `org.kde.plasma.icontasks` (sólo un `metadata.json` huérfano) | Ya parcheado: los layouts usan `org.kde.plasma.taskmanager` |
+| Sólo cambian los colores; iconos/cursor/decoración siguen con Breeze | `lookandfeeltool` de Plasma 6.6 aplica únicamente colores y `LookAndFeelPackage` | El script parsea `contents/defaults` y escribe cada entrada con `kwriteconfig6` |
+| Franja blanca arriba y abajo que parece “otro panel” | Fondo 3840x2160 (16:9) con `FillMode=1` (`KeepAspectRatio`) en pantalla 16:10 → letterbox | El script fuerza `FillMode=2` |
+| Captura `virsh screenshot` en negro con `Display output is not active` | La pantalla de la VM está en reposo | `virsh qemu-monitor-command <dominio> --hmp 'sendkey ctrl'` y volver a capturar |
+| Pantalla bloqueada al capturar | Bloqueo por inactividad | `loginctl unlock-session <id>` dentro de la VM; los cambios se aplican igualmente |
+| La decoración vuelve a Breeze sola | kwin hizo fallback porque el tema Aurorae no cargó | Revisa `kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key library`; reinstala con el script |
+| `No hay bus de sesion` pese a tener sesión | Variable de entorno o `$XDG_RUNTIME_DIR` distinto | El script lo calcula de `/run/user/<uid>`; si usas otro uid, ajústalo |
+| `No hay directorios de Global Themes` / falla `lookandfeeltool` | Paquete no instalado o ruta incorrecta | Ejecuta `./install.sh` primero (lo hace el script) y revisa `~/.local/share/plasma/look-and-feel` |
+| Sin red en la VM al descargar iconos | NAT de libvirt caído o DNS | Comprueba `ip route` en la VM y `virsh net-list --all` en el host |
 
 ## Parches locales incluidos
 
-- `install.sh`: respeta `${dest}` para `layout-templates` en la rama root; corrige `-n/--name`, que guardaba el
-  flag en vez de su valor.
-- `plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Dark|Light/contents/layouts/org.kde.plasma.desktop-layout.js`
-  y `plasma/layout-templates/org.github.desktop.MacOSDock/contents/layout.js`: `org.kde.plasma.taskmanager`
-  en lugar de `org.kde.plasma.icontasks`.
+| Fichero | Cambio | Motivo |
+| --- | --- | --- |
+| `install.sh` | `LAYOUT_DIR="${dest}/share/plasma/layout-templates"` | En la rama root estaba hardcodeado a `/usr` |
+| `install.sh` | `-n/--name` → `name="${2}"; shift 2` | El original guardaba el propio flag y rompía la opción |
+| `plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Dark/contents/layouts/org.kde.plasma.desktop-layout.js` | `org.kde.plasma.icontasks` → `org.kde.plasma.taskmanager` | El applet “Icons-only task manager” ya no existe en Plasma 6.6 |
+| `plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Light/contents/layouts/org.kde.plasma.desktop-layout.js` | ídem | ídem |
+| `plasma/layout-templates/org.github.desktop.MacOSDock/contents/layout.js` | ídem | ídem |
 
-Se guardaron en la rama local `fedora-44-plasma-6.6` (no se suben a `origin`).
+Commits de la rama local `fedora-44-plasma-6.6`:
 
-## Notas para reconstruir el escenario desde cero (GNOME Boxes)
+- `dd15e3d` — fix: plasma 6.6 / fedora compatibility fixes
+- `887df8f` — feat: reproducible Fedora KDE Plasma 6 provisioning scripts
 
-1. Crear la VM con la ISO de Fedora KDE Desktop y completar la instalación.
-2. Dentro de la VM activar SSH:
-   `sudo dnf install -y openssh-server && sudo systemctl enable --now sshd`
-   (el script puede hacerlo con `--enable-ssh`).
-3. Desde el host averiguar la IP: `virsh domifaddr <dominio> --source arp`.
-4. `ssh-copy-id usuario@IP` y luego `./fedora/setup-remote.sh usuario@IP`.
-5. Opcional: reservar la IP por DHCP en la red `virbr0` (requiere root en el host) para que no cambie al
-   reiniciar la VM.
+## Compatibilidad y mantenimiento
+
+- **Fedora 44 / Plasma 6.6.4 / Qt 6.10.2 / Wayland**: soportado y verificado.
+- **Aurorae** sigue presente en Plasma 6.6:
+  `/usr/lib64/qt6/plugins/org.kde.kdecoration3/org.kde.kwin.aurorae.so`. Si kwin hiciera fallback, reescribiría
+  `kwinrc` con `org.kde.breezedecoration`: es la señal para revisar el tema de Aurorae instalado.
+- **Applets**: en Fedora 44 los applets “core” (reloj, bandeja, kickoff, taskmanager…) vienen **compilados** en
+  `/usr/lib64/qt6/plugins/plasma/applets/*.so`, no como directorios en `/usr/share/plasma/plasmoids`. Por eso un
+  `ls` de esa ruta engaña: el applet sí existe.
+- **Actualizar desde upstream** conservando los parches:
+
+  ```bash
+  git switch fedora-44-plasma-6.6
+  git pull upstream main          # o: git fetch upstream && git rebase upstream/main
+  git cherry-pick dd15e3d 887df8f # tus commits locales, si el rebase los dejó fuera
+  ```
+
+  Tras actualizar, vuelve a revisar los 5 ficheros parcheados: upstream puede reintroducir `icontasks`.
+
+## Alcance y fuera de alcance
+
+**Incluido**: esquema de color, tema Plasma, decoración de ventana (Aurorae), iconos, cursores, estilo Qt
+(Kvantum), fondo de pantalla, layout macOS (panel superior + dock) y recarga de la sesión.
+
+**Fuera de alcance (por ahora)**:
+
+| Pieza | Motivo / cómo activarla |
+| --- | --- |
+| Tema de login `sddm/` | Esta instalación **no trae SDDM**. Instalarlo: `sudo dnf install sddm sddm-wayland-plasma`, habilitarlo y aplicar `sddm/MacTahoe-6.0` |
+| Blur tipo macOS (`kwin-effects-forceblur`) | Efecto externo [kwin-effects-forceblur](https://github.com/taj-ny/kwin-effects-forceblur); recomendado por el autor (esquinas 24 px) |
+| Repo original de iconos | Se descarga automáticamente: [MacTahoe-icon-theme](https://github.com/vinceliuice/MacTahoe-icon-theme) |
+
+## Referencias
+
+- Tema original: <https://github.com/vinceliuice/MacTahoe-kde>
+- Iconos y cursores: <https://github.com/vinceliuice/MacTahoe-icon-theme>
+- Kvantum: <https://github.com/tsujan/Kvantum>
+- Efecto de blur recomendado: <https://github.com/taj-ny/kwin-effects-forceblur>

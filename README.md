@@ -43,4 +43,20 @@ If you like my project, you can donate at:
 ![light](plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Light/contents/previews/fullscreenpreview.jpg)
 ![dark](plasma/look-and-feel/com.github.vinceliuice.MacTahoe-Dark/contents/previews/fullscreenpreview.jpg)
 
+## Local provisioning (Fedora KDE / Plasma 6)
+
+This repository also carries a **local, reproducible setup for Fedora KDE Plasma 6** (tested on Fedora 44,
+Plasma 6.6.4, Qt 6.10.2, Wayland, inside a GNOME Boxes VM), plus the compatibility patches needed for Plasma 6.6
+(the `org.kde.plasma.icontasks` applet no longer exists and several `defaults` entries are not applied by
+`lookandfeeltool`).
+
+See **[fedora/README.md](fedora/README.md)** for requirements, usage, verification, rollback and troubleshooting.
+
+Quick start from the host:
+
+```sh
+ssh-copy-id user@VM_IP
+./fedora/setup-remote.sh user@VM_IP
+```
+
 
