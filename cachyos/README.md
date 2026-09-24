@@ -13,6 +13,8 @@ cd /tmp/mac_kde/cachyos && sudo ./setup-autologin.sh "${USER}"
 sudo systemctl restart sddm
 ```
 
-Esto escribe `/etc/sddm.conf.d/10-autologin.conf` con `[Autologin] User=<tu-usuario> Session=plasma Relogin=true`.
+El script detecta el gestor de sesion:
+- **plasmalogin** (Plasma Login Manager, el estandar de CachyOS) → escribe `/etc/plasmalogin.conf.d/autologin.conf` y anade el usuario al grupo `plasmalogin`.
+- **SDDM** (si existiera) → escribe `/etc/sddm.conf.d/10-autologin.conf`.
 
-Si al reiniciar aun pide password: `sudo usermod -aG autologin ${USER}`.
+Si volviera a pedir password: revisa `systemctl status plasmalogin` y que el usuario este en el grupo `plasmalogin` (`groups $USER`).
