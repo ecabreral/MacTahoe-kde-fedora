@@ -11,7 +11,8 @@ CHOICE=auto
 FORCE_SOFTWARE=0
 
 BUILTIN_ID="magiclamp"
-YAML_ID="kwin4_effect_yetanothermagiclamp"
+YAML_FALLBACK_ID="kwin4_effect_yetanothermagiclamp"
+YAML_ID="${YAML_FALLBACK_ID}"
 
 usage() {
   cat <<EOF
@@ -124,6 +125,18 @@ select_effect() {
   esac
 }
 
+resolve_yaml_id() {
+  local found
+  found="$(run_qdbus /Effects org.freedesktop.DBus.Properties.Get org.kde.kwin.Effects listOfEffects 2>/dev/null \
+    | grep -o "'[^']*yetanothermagiclamp[^']*'" | tr -d "'" | head -1 || true)"
+  if [[ -n "${found}" ]]; then
+    YAML_ID="${found}"
+    say "Id del efecto YAML detectado: ${YAML_ID}"
+  else
+    YAML_ID="${YAML_FALLBACK_ID}"
+  fi
+}
+
 minimize_ids() { printf '%s\n' "${BUILTIN_ID}" "${YAML_ID}" "squash"; }
 
 other_minimize_ids() {
@@ -144,6 +157,7 @@ locate_session
 command -v kwriteconfig6 >/dev/null || die "No encuentro kwriteconfig6"
 pgrep -x kwin_wayland >/dev/null || die "No hay una sesion de KWin Wayland activa"
 
+resolve_yaml_id
 select_effect
 
 if [[ "${APPLY}" == "enable" ]]; then
@@ -153,6 +167,9 @@ if [[ "${APPLY}" == "enable" ]]; then
     say "Activando el Magic Lamp integrado de kwin y desactivando el resto (grupo exclusivo minimize)"
   fi
   set_plugin_flag "${EFFECT_ID}" true
+  if [[ "${EFFECT_ID}" == "${YAML_ID}" && "${YAML_FALLBACK_ID}" != "${YAML_ID}" ]]; then
+    set_plugin_flag "${YAML_FALLBACK_ID}" true
+  fi
   local_effect="${EFFECT_ID}"
   while read -r id; do
     set_plugin_flag "${id}" false
