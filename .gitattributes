@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Excluir del empaquetado de releases (git archive)
+/.obsidian export-ignore
+/dist export-ignore
